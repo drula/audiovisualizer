@@ -2,7 +2,7 @@
  * GStreamer
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
- * Copyright (C) 2016 andrej <<user@hostname.org>>
+ * Copyright (C) 2016 Andrej Dudinov <adudinov@yandex.by>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -97,6 +97,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     );
 
 #define gst_audiovisualizer_parent_class parent_class
+/* Setup the GObject basics so that all functions will be called appropriately. */
 G_DEFINE_TYPE (GstAudiovisualizer, gst_audiovisualizer, GST_TYPE_ELEMENT);
 
 static void gst_audiovisualizer_set_property (GObject * object, guint prop_id,
@@ -109,7 +110,7 @@ static GstFlowReturn gst_audiovisualizer_chain (GstPad * pad, GstObject * parent
 
 /* GObject vmethod implementations */
 
-/* initialize the audiovisualizer's class */
+/* initialize the audiovisualizer's class, registering the element details */
 static void
 gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
 {
@@ -126,11 +127,12 @@ gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
       g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
           FALSE, G_PARAM_READWRITE));
 
+  /* Metadata */
   gst_element_class_set_details_simple(gstelement_class,
-    "Audiovisualizer",
+    "Audiovisualizer plugin",
     "FIXME:Generic",
-    "FIXME:Generic Template Element",
-    "andrej <<user@hostname.org>>");
+    "Converts audio streaming data to video stream",
+    "Andrey Dudinov <adudinov@yandex.by>");
 
   gst_element_class_add_pad_template (gstelement_class,
       gst_static_pad_template_get (&src_factory));

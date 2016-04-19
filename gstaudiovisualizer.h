@@ -2,7 +2,7 @@
  * GStreamer
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
- * Copyright (C) 2016 andrej <<user@hostname.org>>
+ * Copyright (C) 2016 Andrey Dudinov <adudinov@yandex.by>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -50,6 +50,8 @@
 
 G_BEGIN_DECLS
 
+
+/* Standard macros for defining types for this element.  */
 /* #defines don't like whitespacey bits */
 #define GST_TYPE_AUDIOVISUALIZER \
   (gst_audiovisualizer_get_type())
@@ -65,6 +67,7 @@ G_BEGIN_DECLS
 typedef struct _GstAudiovisualizer      GstAudiovisualizer;
 typedef struct _GstAudiovisualizerClass GstAudiovisualizerClass;
 
+/* Definition of structure storing data for this element. */
 struct _GstAudiovisualizer
 {
   GstElement element;
@@ -74,11 +77,13 @@ struct _GstAudiovisualizer
   gboolean silent;
 };
 
+/* Standard definition defining a class for this element. */
 struct _GstAudiovisualizerClass 
 {
   GstElementClass parent_class;
 };
 
+/* Standard function returning type information. */
 GType gst_audiovisualizer_get_type (void);
 
 G_END_DECLS
