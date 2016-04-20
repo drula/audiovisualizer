@@ -2,7 +2,7 @@
  * GStreamer
  * Copyright (C) 2005 Thomas Vander Stichele <thomas@apestaart.org>
  * Copyright (C) 2005 Ronald S. Bultje <rbultje@ronald.bitfreak.net>
- * Copyright (C) 2016 Andrej Dudinov <adudinov@yandex.by>
+ * Copyright (C) 2016 Andrey Dudinov <adudinov@yandex.by>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -84,13 +84,21 @@ enum
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
+    "sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("ANY")
+    GST_STATIC_CAPS (
+      "audio/x-raw, "  /* media type */
+      "format = (string) "
+        GST_AUDIO_NE (S16) ", "  /*! 16 bit, stereo (?) */
+      "channels = (int) {1, 2}, "  /* list of all possible values */
+      "rate = (int) [8000, 96000]"  /* range of all possible values */
+      )
     );
 
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE (
+    "src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("ANY")
@@ -148,18 +156,27 @@ gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
 static void
 gst_audiovisualizer_init (GstAudiovisualizer * filter)
 {
+  /* pad through which data comes in to the element */
   filter->sinkpad = gst_pad_new_from_static_template (&sink_factory, "sink");
+
+  /* pads are configured here with gst_pad_set_*_function () */
   gst_pad_set_event_function (filter->sinkpad,
                               GST_DEBUG_FUNCPTR(gst_audiovisualizer_sink_event));
   gst_pad_set_chain_function (filter->sinkpad,
                               GST_DEBUG_FUNCPTR(gst_audiovisualizer_chain));
   GST_PAD_SET_PROXY_CAPS (filter->sinkpad);
+
   gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
 
+  /* pad through which data goes out of the element */
   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
+
+  /*! pads are configured here with gst_pad_set_*_function () */
   GST_PAD_SET_PROXY_CAPS (filter->srcpad);
+
   gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
 
+  /* properties initial value */
   filter->silent = FALSE;
 }
 
@@ -228,6 +245,13 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
   return ret;
 }
 
+/* converting audiodata to video */
+static GstBuffer *
+gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * buf)
+{
+  return NULL;
+}
+
 /* chain function
  * this function does the actual processing
  */
@@ -235,14 +259,18 @@ static GstFlowReturn
 gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
   GstAudiovisualizer *filter;
+  GstBuffer *outbuf;
 
   filter = GST_AUDIOVISUALIZER (parent);
+  outbuf = gst_audiovisualizer_process_data (filter, buf);
+  gst_buffer_unref (buf);
 
-  if (filter->silent == FALSE)
-    g_print ("I'm plugged, therefore I'm in.\n");
+  if (!outbuf) {
+    GST_ELEMENT_ERROR (GST_ELEMENT (filter), STREAM, FAILED, (NULL), (NULL));
+    return GST_FLOW_ERROR;
+  }
 
-  /* just push out the incoming buffer without touching it */
-  return gst_pad_push (filter->srcpad, buf);
+  return gst_pad_push (filter->srcpad, outbuf);
 }
 
 
@@ -253,7 +281,7 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 static gboolean
 audiovisualizer_init (GstPlugin * audiovisualizer)
 {
-  /* debug category for fltering log messages
+  /* debug category for filtering log messages
    *
    * exchange the string 'Template audiovisualizer' with your description
    */
@@ -281,7 +309,7 @@ GST_PLUGIN_DEFINE (
     GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     audiovisualizer,
-    "Template audiovisualizer",
+    "Audiovisualizer plugin",
     audiovisualizer_init,
     VERSION,
     "LGPL",
