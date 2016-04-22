@@ -61,7 +61,7 @@
 #endif
 
 #include <gst/gst.h>
-
+#include <gst/audio/audio.h>
 #include "gstaudiovisualizer.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_audiovisualizer_debug);
@@ -74,6 +74,7 @@ enum
   LAST_SIGNAL
 };
 
+/* properties */
 enum
 {
   PROP_0,
@@ -311,7 +312,7 @@ GST_PLUGIN_DEFINE (
     audiovisualizer,
     "Audiovisualizer plugin",
     audiovisualizer_init,
-    VERSION,
+    "1.0",
     "LGPL",
     "GStreamer",
     "http://gstreamer.net/"
