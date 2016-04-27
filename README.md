@@ -9,6 +9,9 @@ gcc -fPIC gstaudiovisualizer.c -c \`pkg-config --cflags --libs gstreamer-1.0 gst
 sudo gcc -shared -o /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstaudiovisualizer.so gstaudiovisualizer.o
 
 
+Or just launch compile.sh.
+
+
 Usage:
 
 gst-launch-1.0 \<plugins chain with audio output\> ! audiovisualizer ! \<plugins chain with video input\>
