@@ -62,6 +62,7 @@
 
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
+#include <gst/video/video.h>
 #include "gstaudiovisualizer.h"
 
 GST_DEBUG_CATEGORY_STATIC (gst_audiovisualizer_debug);
@@ -102,7 +103,12 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE (
     "src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("ANY")
+    GST_STATIC_CAPS (
+      "video/x-raw, "
+      "width = 640, "
+      "height = 480"
+      /* "format = " */
+      )
     );
 
 #define gst_audiovisualizer_parent_class parent_class
