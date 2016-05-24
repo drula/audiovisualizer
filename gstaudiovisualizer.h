@@ -74,7 +74,7 @@ struct _GstAudiovisualizer
 
   GstPad *sinkpad, *srcpad;
 
-  gboolean silent;
+  gboolean silent; /*!?*/
 };
 
 /* Standard definition defining a class for this element. */

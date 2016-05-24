@@ -57,13 +57,17 @@
  */
 
 #ifdef HAVE_CONFIG_H
-#  include <config.h>
+#include <config.h>
 #endif
 
-#include <gst/gst.h>
+#include <gst/gst.h> /* ! */
 #include <gst/audio/audio.h>
 #include <gst/video/video.h>
 #include "gstaudiovisualizer.h"
+
+#include <stdio.h> /* !!! */
+#include <stdlib.h>
+#include <string.h>
 
 GST_DEBUG_CATEGORY_STATIC (gst_audiovisualizer_debug);
 #define GST_CAT_DEFAULT gst_audiovisualizer_debug
@@ -79,36 +83,91 @@ enum
 enum
 {
   PROP_0,
-  PROP_SILENT
+  PROP_SILENT /*! ? */
 };
 
 /* the capabilities of the inputs and outputs.
  *
  * describe the real formats here.
  */
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
+/*static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE (
     "sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
+    / * GST_STATIC_CAPS (GST_AUDIO_INT_STANDARD_PAD_TEMPLATE_CAPS) * /
     GST_STATIC_CAPS (
-      "audio/x-raw, "  /* media type */
+      "audio/x-raw, "  /* media type * /
       "format = (string) "
-        GST_AUDIO_NE (S16) ", "  /*! 16 bit, stereo (?) */
-      "channels = (int) {1, 2}, "  /* list of all possible values */
-      "rate = (int) [8000, 96000]"  /* range of all possible values */
+        GST_AUDIO_NE (S16) ", "  /*! 16 bit, stereo (?) * /
+      "channels = (int) {1, 2}, "  /* list of all possible values * /
+      "rate = (int) [8000, 96000]"  /* range of all possible values * /
       )
-    );
+    );*/
 
-static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE (
+/*! can't find it in gst/video/video.h */
+#define GST_VIDEO_BYTE1_MASK_32  "0xFF000000"
+#define GST_VIDEO_BYTE2_MASK_32  "0x00FF0000"
+#define GST_VIDEO_BYTE3_MASK_32  "0x0000FF00"
+#define GST_VIDEO_BYTE4_MASK_32  "0x000000FF"
+
+#if G_BYTE_ORDER == G_BIG_ENDIAN
+static GstStaticPadTemplate src_factory1 = GST_STATIC_PAD_TEMPLATE ("src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("video/x-raw-rgb, "
+        "width = (int)256, "
+        "height = (int)128, "
+        "framerate = " GST_VIDEO_FPS_RANGE
+        "bpp = (int) 32, "
+        "depth = (int) 24, "
+        "endianness = (int) BIG_ENDIAN, "
+        "red_mask = (int) " GST_VIDEO_BYTE2_MASK_32 ", "
+        "green_mask = (int) " GST_VIDEO_BYTE3_MASK_32 ", "
+        "blue_mask = (int) " GST_VIDEO_BYTE4_MASK_32 ", "
+        )
+    );
+#else
+static GstStaticPadTemplate src_factory1 = GST_STATIC_PAD_TEMPLATE (
     "src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS (
-      "video/x-raw, "
-      "width = 640, "
-      "height = 480"
-      /* "format = " */
+      "video/x-raw-rgb, "
+      "width = (int) 256, " /* ! */
+      "height = (int) 128, "
+      "framerate = " GST_VIDEO_FPS_RANGE
+      "bpp = (int) 32, "
+      "depth = (int) 24, "
+      "endianness = (int) LITTLE_ENDIAN, " /* ! BIG_ENDIAN? */
+      "red_mask = (int) " GST_VIDEO_BYTE3_MASK_32 ", "
+      "green_mask = (int) " GST_VIDEO_BYTE2_MASK_32 ", "
+      "blue_mask = (int) " GST_VIDEO_BYTE1_MASK_32 ", "
       )
+    );
+#endif
+
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("ANY")
+    );
+
+static GstStaticPadTemplate sink_factory2 = GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("video/x-raw, format = (string) RGB, width = (int)256, height = (int)128")
+    );
+
+static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("ANY")
+    );
+
+static GstStaticPadTemplate src_factory2 = GST_STATIC_PAD_TEMPLATE ("src",
+    GST_PAD_SRC,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("video/x-raw, format = (string) RGB, width = (int)256, height = (int)128")
     );
 
 #define gst_audiovisualizer_parent_class parent_class
@@ -122,6 +181,7 @@ static void gst_audiovisualizer_get_property (GObject * object, guint prop_id,
 
 static gboolean gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
 static GstFlowReturn gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
+static gboolean gst_audiovisualizer_src_setcaps (GstAudiovisualizer * filter, GstCaps * caps);
 
 /* GObject vmethod implementations */
 
@@ -129,11 +189,8 @@ static GstFlowReturn gst_audiovisualizer_chain (GstPad * pad, GstObject * parent
 static void
 gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
 {
-  GObjectClass *gobject_class;
-  GstElementClass *gstelement_class;
-
-  gobject_class = (GObjectClass *) klass;
-  gstelement_class = (GstElementClass *) klass;
+  GObjectClass *gobject_class = (GObjectClass *) klass;
+  GstElementClass *gstelement_class = (GstElementClass *) klass;
 
   gobject_class->set_property = gst_audiovisualizer_set_property;
   gobject_class->get_property = gst_audiovisualizer_get_property;
@@ -174,9 +231,18 @@ gst_audiovisualizer_init (GstAudiovisualizer * filter)
   GST_PAD_SET_PROXY_CAPS (filter->sinkpad);
 
   gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
+  /*gst_pad_set_setcaps_function (filter->srcpad,
+                                GST_DEBUG_FUNCPTR (gst_audiovisualizer_src_setcaps));*/
 
   /* pad through which data goes out of the element */
   filter->srcpad = gst_pad_new_from_static_template (&src_factory, "src");
+  // gst_pad_use_fixed_caps (filter->srcpad); /*!*/
+  // GstCaps *caps = gst_caps_new_simple ("video/x-raw", "format = (string) RGB, width = (int)256, height = (int)128", NULL);
+  // if (!gst_pad_set_caps (filter->srcpad, caps)) {
+  //   GST_ELEMENT_ERROR (filter, CORE, NEGOTIATION, (NULL),
+  //     ("Something went wrong...\n"));
+  //   //! return GST_FLOW_ERROR;
+  // }
 
   /*! pads are configured here with gst_pad_set_*_function () */
   GST_PAD_SET_PROXY_CAPS (filter->srcpad);
@@ -219,6 +285,17 @@ gst_audiovisualizer_get_property (GObject * object, guint prop_id,
   }
 }
 
+/*static gboolean
+gst_audiovisualizer_src_setcaps (GstAudiovisualizer * filter, GstCaps * caps)
+{
+  GstStructure *structure = gst_caps_get_structure (caps, 0);
+   
+  gst_structure_get_int (structure, "width", &filter->width);
+  gst_structure_get_int (structure, "height", &filter->height);
+  
+  return TRUE;
+}*/
+
 /* GstElement vmethod implementations */
 
 /* this function handles sink events */
@@ -240,7 +317,7 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
 
       gst_event_parse_caps (event, &caps);
       /* do something with the caps */
-
+      //! ret = gst_audiovisualizer_src_setcaps(filter, caps);
       /* and forward */
       ret = gst_pad_event_default (pad, parent, event);
       break;
@@ -254,9 +331,29 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
 
 /* converting audiodata to video */
 static GstBuffer *
-gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * buf)
+gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * inbuf)
 {
-  return NULL;
+  GstMapInfo inbuf_info;
+  gst_buffer_map (inbuf, &inbuf_info, GST_MAP_READ /*!?*/);
+
+  GstBuffer *outbuf = gst_buffer_new ();
+
+  GstMemory *mem = gst_allocator_alloc (NULL, inbuf_info.size, NULL);
+  gst_buffer_append_memory (outbuf, mem);
+
+  GstMapInfo outbuf_info;
+  gst_buffer_map (outbuf, &outbuf_info, GST_MAP_WRITE);
+
+  memcpy (outbuf_info.data, inbuf_info.data, inbuf_info.size);
+
+  int i;
+  for (i = 0; i < inbuf_info.size; ++i)
+    outbuf_info.data[i] = inbuf_info.data[i];
+
+  gst_buffer_unmap (inbuf, &inbuf_info);
+  gst_buffer_unmap (outbuf, &outbuf_info);
+
+  return outbuf;
 }
 
 /* chain function
@@ -265,11 +362,8 @@ gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * buf)
 static GstFlowReturn
 gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * buf)
 {
-  GstAudiovisualizer *filter;
-  GstBuffer *outbuf;
-
-  filter = GST_AUDIOVISUALIZER (parent);
-  outbuf = gst_audiovisualizer_process_data (filter, buf);
+  GstAudiovisualizer *filter = GST_AUDIOVISUALIZER (parent);
+  GstBuffer *outbuf = gst_audiovisualizer_process_data (filter, buf);
   gst_buffer_unref (buf);
 
   if (!outbuf) {
