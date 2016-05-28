@@ -47,6 +47,7 @@
 #define __GST_AUDIOVISUALIZER_H__
 
 #include <gst/gst.h>
+//! #include <gst/base/gstadapter.h>
 
 G_BEGIN_DECLS
 
@@ -74,7 +75,29 @@ struct _GstAudiovisualizer
 
   GstPad *sinkpad, *srcpad;
 
-  gboolean silent; /*!?*/
+  //! GstAdapter *adapter;
+
+  guint64      next_ts;             /* expected timestamp of the next frame */
+  guint64      frame_duration;      /* video frame duration    */
+  gint         rate;                /* sample rate             */
+  guint        bps;                 /* bytes per sample        */
+  guint        spf;                 /* samples per video frame */
+  GstBufferPool *pool;
+
+  GstSegment   segment;
+
+  /* QoS stuff *//* with LOCK */
+  gdouble      proportion;
+  GstClockTime earliest_time;
+
+  /* video state */
+  gint         fps_num;
+  gint         fps_denom;
+  gint         width;
+  gint         height;
+  guint        outsize;
+
+  //!? gboolean silent; /*!?*/
 };
 
 /* Standard definition defining a class for this element. */
