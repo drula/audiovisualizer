@@ -47,7 +47,6 @@
 #define __GST_AUDIOVISUALIZER_H__
 
 #include <gst/gst.h>
-//! #include <gst/base/gstadapter.h>
 
 G_BEGIN_DECLS
 
@@ -74,8 +73,6 @@ struct _GstAudiovisualizer
   GstElement element;
 
   GstPad *sinkpad, *srcpad;
-
-  //! GstAdapter *adapter;
 
   guint64      next_ts;             /* expected timestamp of the next frame */
   guint64      frame_duration;      /* video frame duration    */

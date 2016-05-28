@@ -51,7 +51,7 @@
  * <refsect2>
  * <title>Example launch line</title>
  * |[
- * gst-launch -v -m fakesrc ! audiovisualizer ! fakesink silent=TRUE
+ * gst-launch-1.0 -v audiotestsrc ! audioconvert ! audiovisualizer ! videoconvert ! ximagesink
  * ]|
  * </refsect2>
  */
@@ -62,20 +62,15 @@
 
 #include <gst/audio/audio.h>
 #include <gst/video/video.h>
-//! #include <gst/base/gstadapter.h>
 #include "gstaudiovisualizer.h"
 
-#include <stdio.h> /* !!! */
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
 //!
-#define scope_width 256
-#define scope_height 128
-#define convolver_depth 8
-#define convolver_small (1 << convolver_depth)
-#define convolver_big (2 << convolver_depth)
+#define SCOPE_WIDTH 256
+#define SCOPE_HEIGHT 128
 
 GST_DEBUG_CATEGORY_STATIC (gst_audiovisualizer_debug);
 #define GST_CAT_DEFAULT gst_audiovisualizer_debug
@@ -104,23 +99,26 @@ enum
 #define RGB_ORDER "BGRx"
 #endif
 
+static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
+    GST_PAD_SINK,
+    GST_PAD_ALWAYS,
+    GST_STATIC_CAPS ("audio/x-raw, "
+        "format = (string) " GST_AUDIO_NE (S16) ", " // native endianness
+        "rate = (int) [ 8000, 96000 ], " /*!?*/
+        "channels = (int) 1, " /*! {1, 2}*/
+        "layout = (string) interleaved")
+    );
+/* {x1, x2} - list, [x1, x2] - range */
+/* xxx ; yyy - several multimedia types */
+
 static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS ("video/x-raw, "
         "format = (string) " RGB_ORDER ", "
-        "width = " G_STRINGIFY (scope_width) ", "
-        "height = " G_STRINGIFY (scope_height) ", "
-        "framerate = " GST_VIDEO_FPS_RANGE)
-    );
-
-static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink",
-    GST_PAD_SINK,
-    GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("audio/x-raw, "
-        "format = (string) " GST_AUDIO_NE (S16) ", "
-        "rate = (int) [ 8000, 96000 ], "
-        "channels = (int) 1, " "layout = (string) interleaved")
+        "width = " G_STRINGIFY (SCOPE_WIDTH) ", "
+        "height = " G_STRINGIFY (SCOPE_HEIGHT) ", "
+        "framerate = " GST_VIDEO_FPS_RANGE) // (fraction) [ 0, max ]
     );
 
 #define gst_audiovisualizer_parent_class parent_class
@@ -157,10 +155,9 @@ gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
   //! gobject_class->finalize = ?
   //! gstelement_class->change_state = ?
 
-  /* Metadata */
-  gst_element_class_set_details_simple(gstelement_class,
-    "Audiovisualizer plugin",
-    "FIXME:Generic",
+  gst_element_class_set_static_metadata(gstelement_class,
+    "Audiovisualizer",
+    "Visualization",
     "Converts audio streaming data to video stream",
     "Andrey Dudinov <adudinov@yandex.by>");
 
@@ -210,8 +207,8 @@ gst_audiovisualizer_init (GstAudiovisualizer * filter)
   filter->bps = sizeof (gint16);
 
   /* reset the initial video state */
-  filter->width = scope_width;
-  filter->height = scope_height;
+  filter->width = SCOPE_WIDTH;
+  filter->height = SCOPE_HEIGHT;
   filter->fps_num = 25;      /* desired frame rate */
   filter->fps_denom = 1;
   //! filter->visstate = NULL;
@@ -406,10 +403,8 @@ ensure_negotiated (GstAudiovisualizer * filter)
 static gboolean
 gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 {
-  GstAudiovisualizer *filter;
   gboolean ret;
-
-  filter = GST_AUDIOVISUALIZER (parent);
+  GstAudiovisualizer *filter = GST_AUDIOVISUALIZER (parent);
 
   GST_LOG_OBJECT (filter, "Received %s event: %" GST_PTR_FORMAT,
       GST_EVENT_TYPE_NAME (event), event);
@@ -418,14 +413,16 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
     case GST_EVENT_CAPS:
     {
       GstCaps * caps;
-
       gst_event_parse_caps (event, &caps);
-      /* do something with the caps */
-      //! ret = gst_audiovisualizer_src_setcaps(filter, caps);
-      /* and forward */
-      ret = gst_pad_event_default (pad, parent, event);
+      ret = gst_audiovisualizer_src_setcaps(filter, caps);
+      gst_event_unref (event); //!?
       break;
     }
+
+    case GST_EVENT_EOS:
+      //! TO DO
+      break;
+    
     default:
       ret = gst_pad_event_default (pad, parent, event);
       break;
@@ -497,18 +494,18 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
 
   GstMapInfo inbuf_info;
   gst_buffer_map (inbuf, &inbuf_info, GST_MAP_READ /*!?*/);
-  guint32 *pixels = calloc(scope_width * scope_height, sizeof (guint32));
+  guint32 *pixels = calloc(SCOPE_WIDTH * SCOPE_HEIGHT, sizeof (guint32));
 
   gint16 *data = (gint16 *) inbuf_info.data;
   gsize size = inbuf_info.size / 2; //! (sizeof (guint16) / sizeof (guint8));
-  gdouble samples_per_pixel = (gdouble) size / scope_width;
+  gdouble samples_per_pixel = (gdouble) size / SCOPE_WIDTH;
 
   double start = 0;
   double finish;
   long istart, ifinish;
   istart = 0;
   
-  int ip = 0;
+  int x = 0;
   while (start < size) {
     finish = start + samples_per_pixel;  
     ifinish = lround (finish);
@@ -519,13 +516,12 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
       sum += (gdouble) data[i];
     sum /= ifinish - istart;
 
-    // long x = ip;
-    long y = scope_height / 2 + (sum / G_MAXUINT16) * scope_height / 2;
-    pixels[y * scope_width + ip] = G_MAXUINT32;
+    long y = SCOPE_HEIGHT / 2 + (sum / G_MAXUINT16) * SCOPE_HEIGHT / 2;
+    pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
 
     start = finish;
     istart = ifinish;
-    ++ip;
+    ++x;
   }
  
   GstBuffer *outbuf = NULL;
@@ -551,7 +547,7 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
  * register the element factories and other features
  */
 static gboolean
-audiovisualizer_init (GstPlugin * audiovisualizer)
+plugin_init (GstPlugin * audiovisualizer)
 {
   /* debug category for filtering log messages
    *
@@ -570,7 +566,7 @@ audiovisualizer_init (GstPlugin * audiovisualizer)
  * compile this code. GST_PLUGIN_DEFINE needs PACKAGE to be defined.
  */
 #ifndef PACKAGE
-#define PACKAGE "myfirstaudiovisualizer"
+#define PACKAGE "audiovisualizer"
 #endif
 
 /* gstreamer looks for this structure to register audiovisualizers
@@ -582,9 +578,9 @@ GST_PLUGIN_DEFINE (
     GST_VERSION_MINOR,
     audiovisualizer,
     "Audiovisualizer plugin",
-    audiovisualizer_init,
+    plugin_init,
     "1.0",
     "LGPL",
-    "GStreamer",
-    "http://gstreamer.net/"
+    PACKAGE,
+    "https://github.com/drula/audiovisualizer"
 )
