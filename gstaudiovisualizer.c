@@ -403,7 +403,6 @@ ensure_negotiated (GstAudiovisualizer * filter)
 static gboolean
 gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * event)
 {
-  gboolean ret;
   GstAudiovisualizer *filter = GST_AUDIOVISUALIZER (parent);
 
   GST_LOG_OBJECT (filter, "Received %s event: %" GST_PTR_FORMAT,
@@ -414,20 +413,31 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
     {
       GstCaps * caps;
       gst_event_parse_caps (event, &caps);
-      ret = gst_audiovisualizer_src_setcaps(filter, caps);
-      gst_event_unref (event); //!?
-      break;
+      return gst_audiovisualizer_src_setcaps(filter, caps);
+      //!? gst_event_unref (event);
+      //! The event should be unreffed with gst_event_unref() if it has not been sent.
     }
 
+    case GST_EVENT_FLUSH_START: //!?
+      return gst_pad_push_event (filter->srcpad, event);
+
+    case GST_EVENT_FLUSH_STOP: //!?
+      return gst_pad_push_event (filter->srcpad, event);
+
+    case GST_EVENT_SEGMENT: //!?
+      /* the newsegment values are used to clip the input samples
+       * and to convert the incomming timestamps to running time so
+       * we can do QoS */
+      gst_event_copy_segment (event, &filter->segment);
+      return gst_pad_push_event (filter->srcpad, event);
+
     case GST_EVENT_EOS:
-      //! TO DO
-      break;
+      //! gst_audiovisualizer_stop_processing (filter);
+      return gst_pad_event_default (pad, parent, event);
     
     default:
-      ret = gst_pad_event_default (pad, parent, event);
-      break;
+      return gst_pad_event_default (pad, parent, event);
   }
-  return ret;
 }
 
 static gboolean
@@ -533,6 +543,8 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
   }
 
   gst_buffer_fill (outbuf, 0, pixels, filter->outsize);
+  gst_buffer_unmap (inbuf, &inbuf_info); //!
+  gst_buffer_unref (inbuf); //!
 
   GST_BUFFER_TIMESTAMP (outbuf) = filter->next_ts;
   GST_BUFFER_DURATION (outbuf) = filter->frame_duration;
