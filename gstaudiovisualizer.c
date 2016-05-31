@@ -131,7 +131,7 @@ static void gst_audiovisualizer_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);*/
 
 static gboolean gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
-static gboolean gst_audiovisualizer_src_event (GstPad * pad, GstObject * parent, GstEvent * event);
+//! static gboolean gst_audiovisualizer_src_event (GstPad * pad, GstObject * parent, GstEvent * event);
 static GstFlowReturn gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * buf);
 static gboolean gst_audiovisualizer_sink_setcaps (GstAudiovisualizer * filter, GstCaps * caps);
 static gboolean gst_audiovisualizer_src_setcaps (GstAudiovisualizer * filter, GstCaps * caps);
@@ -194,8 +194,8 @@ gst_audiovisualizer_init (GstAudiovisualizer * filter)
 
   /*! pads are configured here with gst_pad_set_*_function () */
   //!? GST_PAD_SET_PROXY_CAPS (filter->srcpad);
-  gst_pad_set_event_function (filter->srcpad,
-      GST_DEBUG_FUNCPTR (gst_audiovisualizer_src_event));
+  /*gst_pad_set_event_function (filter->srcpad,
+      GST_DEBUG_FUNCPTR (gst_audiovisualizer_src_event));*/
 
   gst_element_add_pad (GST_ELEMENT (filter), filter->srcpad);
 
@@ -418,18 +418,18 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
       //! The event should be unreffed with gst_event_unref() if it has not been sent.
     }
 
-    case GST_EVENT_FLUSH_START: //!?
+    /*case GST_EVENT_FLUSH_START: //!?
       return gst_pad_push_event (filter->srcpad, event);
 
     case GST_EVENT_FLUSH_STOP: //!?
       return gst_pad_push_event (filter->srcpad, event);
 
     case GST_EVENT_SEGMENT: //!?
-      /* the newsegment values are used to clip the input samples
+      / * the newsegment values are used to clip the input samples
        * and to convert the incomming timestamps to running time so
-       * we can do QoS */
+       * we can do QoS * /
       gst_event_copy_segment (event, &filter->segment);
-      return gst_pad_push_event (filter->srcpad, event);
+      return gst_pad_push_event (filter->srcpad, event);*/
 
     case GST_EVENT_EOS:
       //! gst_audiovisualizer_stop_processing (filter);
@@ -440,37 +440,53 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
   }
 }
 
-static gboolean
+/*static gboolean
 gst_audiovisualizer_src_event (GstPad * pad, GstObject * parent, GstEvent * event)
 {
   return TRUE;
-}
+}*/
 
 /* converting audiodata to video */
-static GstBuffer *
+static guint32 *
 gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * inbuf)
 {
   GstMapInfo inbuf_info;
   gst_buffer_map (inbuf, &inbuf_info, GST_MAP_READ /*!?*/);
+  
+  static guint32 pixels[SCOPE_WIDTH * SCOPE_HEIGHT];
+  memset(pixels, 0, sizeof pixels);
 
-  GstBuffer *outbuf = gst_buffer_new ();
+  gint16 *data = (gint16 *) inbuf_info.data;
+  gsize size = inbuf_info.size / 2; //! (sizeof (guint16) / sizeof (guint8));
+  gdouble samples_per_pixel = (gdouble) size / SCOPE_WIDTH;
 
-  GstMemory *mem = gst_allocator_alloc (NULL, inbuf_info.size, NULL);
-  gst_buffer_append_memory (outbuf, mem);
+  double start = 0;
+  double finish;
+  long istart, ifinish;
+  istart = 0;
+  
+  int x = 0;
+  while (start < size) {
+    finish = start + samples_per_pixel;  
+    ifinish = lround (finish);
 
-  GstMapInfo outbuf_info;
-  gst_buffer_map (outbuf, &outbuf_info, GST_MAP_WRITE);
+    int i;
+    gdouble sum = 0;
+    for (i = istart; i < ifinish; ++i)
+      sum += (gdouble) data[i];
+    sum /= ifinish - istart;
 
-  memcpy (outbuf_info.data, inbuf_info.data, inbuf_info.size);
+    long y = SCOPE_HEIGHT / 2 + (sum / G_MAXUINT16) * SCOPE_HEIGHT / 2;
+    pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
 
-  int i;
-  for (i = 0; i < inbuf_info.size; ++i)
-    outbuf_info.data[i] = inbuf_info.data[i] * 2;
+    start = finish;
+    istart = ifinish;
+    ++x;
+  }
 
   gst_buffer_unmap (inbuf, &inbuf_info);
-  gst_buffer_unmap (outbuf, &outbuf_info);
 
-  return outbuf;
+  return pixels;
 }
 
 /* chain function
@@ -501,38 +517,6 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
 
   if (GST_BUFFER_TIMESTAMP (inbuf) != GST_CLOCK_TIME_NONE)
     filter->next_ts = GST_BUFFER_TIMESTAMP (inbuf);
-
-  GstMapInfo inbuf_info;
-  gst_buffer_map (inbuf, &inbuf_info, GST_MAP_READ /*!?*/);
-  guint32 *pixels = calloc(SCOPE_WIDTH * SCOPE_HEIGHT, sizeof (guint32));
-
-  gint16 *data = (gint16 *) inbuf_info.data;
-  gsize size = inbuf_info.size / 2; //! (sizeof (guint16) / sizeof (guint8));
-  gdouble samples_per_pixel = (gdouble) size / SCOPE_WIDTH;
-
-  double start = 0;
-  double finish;
-  long istart, ifinish;
-  istart = 0;
-  
-  int x = 0;
-  while (start < size) {
-    finish = start + samples_per_pixel;  
-    ifinish = lround (finish);
-
-    int i;
-    gdouble sum = 0;
-    for (i = istart; i < ifinish; ++i)
-      sum += (gdouble) data[i];
-    sum /= ifinish - istart;
-
-    long y = SCOPE_HEIGHT / 2 + (sum / G_MAXUINT16) * SCOPE_HEIGHT / 2;
-    pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
-
-    start = finish;
-    istart = ifinish;
-    ++x;
-  }
  
   GstBuffer *outbuf = NULL;
   GST_LOG_OBJECT (filter, "allocating output buffer");
@@ -542,8 +526,8 @@ gst_audiovisualizer_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
     return flow_ret;
   }
 
+  guint32 *pixels = gst_audiovisualizer_process_data(filter, inbuf);
   gst_buffer_fill (outbuf, 0, pixels, filter->outsize);
-  gst_buffer_unmap (inbuf, &inbuf_info); //!
   gst_buffer_unref (inbuf); //!
 
   GST_BUFFER_TIMESTAMP (outbuf) = filter->next_ts;
