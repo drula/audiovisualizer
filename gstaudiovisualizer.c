@@ -86,7 +86,10 @@ enum
 enum
 {
   PROP_0,
-  PROP_SILENT /*! ? */
+  //! PROP_SILENT
+  PROP_WIDTH,
+  PROP_HEIGHT,
+  PROP_VIDEOPATTERN,
 };
 
 /* the capabilities of the inputs and outputs.
@@ -125,10 +128,10 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
 /* Setup the GObject basics so that all functions will be called appropriately. */
 G_DEFINE_TYPE (GstAudiovisualizer, gst_audiovisualizer, GST_TYPE_ELEMENT);
 
-/*static void gst_audiovisualizer_set_property (GObject * object, guint prop_id,
+static void gst_audiovisualizer_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_audiovisualizer_get_property (GObject * object, guint prop_id,
-    GValue * value, GParamSpec * pspec);*/
+    GValue * value, GParamSpec * pspec);
 
 static gboolean gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * event);
 //! static gboolean gst_audiovisualizer_src_event (GstPad * pad, GstObject * parent, GstEvent * event);
@@ -145,10 +148,18 @@ gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *gstelement_class = (GstElementClass *) klass;
 
-  /*gobject_class->set_property = gst_audiovisualizer_set_property;
+  gobject_class->set_property = gst_audiovisualizer_set_property;
   gobject_class->get_property = gst_audiovisualizer_get_property;
 
-  g_object_class_install_property (gobject_class, PROP_SILENT,
+  g_object_class_install_property(gobject_class, PROP_WIDTH,
+    g_param_spec_int("width", "Width", "Video frame width",
+      32, 512, SCOPE_WIDTH, G_PARAM_READWRITE /*G_PARAM_CONSTRUCT_ONLY ?*/));
+
+  g_object_class_install_property(gobject_class, PROP_HEIGHT,
+    g_param_spec_int("height", "Height", "Video frame height",
+      32, 512, SCOPE_HEIGHT, G_PARAM_READWRITE /*G_PARAM_CONSTRUCT_ONLY ?*/));
+
+  /*g_object_class_install_property (gobject_class, PROP_SILENT,
       g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
           FALSE, G_PARAM_READWRITE));*/
 
@@ -230,7 +241,7 @@ gst_audiovisualizer_finalize (GObject * object)
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
-/*
+
 static void
 gst_audiovisualizer_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
@@ -238,9 +249,14 @@ gst_audiovisualizer_set_property (GObject * object, guint prop_id,
   GstAudiovisualizer *filter = GST_AUDIOVISUALIZER (object);
 
   switch (prop_id) {
-    case PROP_SILENT:
-      filter->silent = g_value_get_boolean (value);
+    case PROP_WIDTH:
+      filter->width = g_value_get_int (value);
       break;
+
+    case PROP_HEIGHT:
+      filter->height = g_value_get_int (value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -254,14 +270,19 @@ gst_audiovisualizer_get_property (GObject * object, guint prop_id,
   GstAudiovisualizer *filter = GST_AUDIOVISUALIZER (object);
 
   switch (prop_id) {
-    case PROP_SILENT:
-      g_value_set_boolean (value, filter->silent);
+    case PROP_WIDTH:
+      g_value_set_int (value, filter->width);
       break;
+
+    case PROP_HEIGHT:
+      g_value_set_int (value, filter->height);
+      break;
+      
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
   }
-}*/
+}
 
 static gboolean
 gst_audiovisualizer_sink_setcaps (GstAudiovisualizer * filter, GstCaps * caps)
@@ -413,8 +434,8 @@ gst_audiovisualizer_sink_event (GstPad * pad, GstObject * parent, GstEvent * eve
     {
       GstCaps * caps;
       gst_event_parse_caps (event, &caps);
+      gst_event_unref (event); //!?
       return gst_audiovisualizer_src_setcaps(filter, caps);
-      //!? gst_event_unref (event);
       //! The event should be unreffed with gst_event_unref() if it has not been sent.
     }
 
