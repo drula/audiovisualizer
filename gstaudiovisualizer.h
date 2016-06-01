@@ -67,6 +67,10 @@ G_BEGIN_DECLS
 typedef struct _GstAudiovisualizer      GstAudiovisualizer;
 typedef struct _GstAudiovisualizerClass GstAudiovisualizerClass;
 
+typedef enum {
+  VIDEOPATTERN_WAVE,
+} VideoPattern;
+
 /* Definition of structure storing data for this element. */
 struct _GstAudiovisualizer
 {
@@ -94,6 +98,7 @@ struct _GstAudiovisualizer
   gint         height;
   guint        outsize;
 
+  VideoPattern pattern;
   //!? gboolean silent; /*!?*/
 };
 

@@ -92,6 +92,27 @@ enum
   PROP_VIDEOPATTERN,
 };
 
+#define GST_TYPE_AUDIOVISUALIZER_VIDEOPATTERN (gst_audiovisualizer_videopattern_get_type ())
+
+static GType
+gst_audiovisualizer_videopattern_get_type (void)
+{
+  static GType videopattern_type = 0;
+
+  if (!videopattern_type) {
+    static GEnumValue pattern_types[] = {
+      { VIDEOPATTERN_WAVE, "Simple wave", "wave" },
+      { 0, NULL, NULL },
+    };
+
+    videopattern_type = g_enum_register_static ("VideoPattern",
+        pattern_types);
+  }
+
+  return videopattern_type;
+}
+
+
 /* the capabilities of the inputs and outputs.
  *
  * describe the real formats here.
@@ -158,6 +179,11 @@ gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
   g_object_class_install_property(gobject_class, PROP_HEIGHT,
     g_param_spec_int("height", "Height", "Video frame height",
       32, 512, SCOPE_HEIGHT, G_PARAM_READWRITE /*G_PARAM_CONSTRUCT_ONLY ?*/));
+
+  g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_VIDEOPATTERN,
+    g_param_spec_enum ("pattern", "Pattern", "Video pattern",
+      GST_TYPE_AUDIOVISUALIZER_VIDEOPATTERN, VIDEOPATTERN_WAVE,
+        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS /*!?*/));
 
   /*g_object_class_install_property (gobject_class, PROP_SILENT,
       g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
@@ -257,6 +283,10 @@ gst_audiovisualizer_set_property (GObject * object, guint prop_id,
       filter->height = g_value_get_int (value);
       break;
 
+    case PROP_VIDEOPATTERN:
+      filter->pattern = g_value_get_enum (value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -276,6 +306,10 @@ gst_audiovisualizer_get_property (GObject * object, guint prop_id,
 
     case PROP_HEIGHT:
       g_value_set_int (value, filter->height);
+      break;
+
+    case PROP_VIDEOPATTERN:
+      g_value_set_enum (value, filter->pattern);
       break;
       
     default:
