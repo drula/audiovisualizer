@@ -69,6 +69,7 @@ typedef struct _GstAudiovisualizerClass GstAudiovisualizerClass;
 
 typedef enum {
   VIDEOPATTERN_WAVE,
+  VIDEOPATTERN_CIRCLE,
 } VideoPattern;
 
 /* Definition of structure storing data for this element. */

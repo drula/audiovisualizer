@@ -69,22 +69,20 @@
 #include <math.h>
 
 //!
-#define SCOPE_WIDTH 256
-#define SCOPE_HEIGHT 128
+#define SCOPE_WIDTH 400
+#define SCOPE_HEIGHT 200
 
 GST_DEBUG_CATEGORY_STATIC (gst_audiovisualizer_debug);
 #define GST_CAT_DEFAULT gst_audiovisualizer_debug
 
 /* Filter signals and args */
-enum
-{
+enum {
   /* FILL ME */
   LAST_SIGNAL
 };
 
 /* properties */
-enum
-{
+enum {
   PROP_0,
   //! PROP_SILENT
   PROP_WIDTH,
@@ -102,6 +100,7 @@ gst_audiovisualizer_videopattern_get_type (void)
   if (!videopattern_type) {
     static GEnumValue pattern_types[] = {
       { VIDEOPATTERN_WAVE, "Simple wave", "wave" },
+      { VIDEOPATTERN_CIRCLE, "Amplitude circle", "circle"},
       { 0, NULL, NULL },
     };
 
@@ -512,31 +511,67 @@ gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * inbuf
   memset(pixels, 0, sizeof pixels);
 
   gint16 *data = (gint16 *) inbuf_info.data;
-  gsize size = inbuf_info.size / 2; //! (sizeof (guint16) / sizeof (guint8));
-  gdouble samples_per_pixel = (gdouble) size / SCOPE_WIDTH;
+  gsize size = inbuf_info.size / (sizeof (guint16) / sizeof (guint8));
 
-  double start = 0;
-  double finish;
-  long istart, ifinish;
-  istart = 0;
-  
-  int x = 0;
-  while (start < size) {
-    finish = start + samples_per_pixel;  
-    ifinish = lround (finish);
+  switch (filter->pattern) {
+  case VIDEOPATTERN_WAVE: {
+    gdouble samples_per_pixel = (gdouble) size / SCOPE_WIDTH;
+
+    double start = 0;
+    double finish;
+    long istart, ifinish;
+    istart = 0;
+    
+    int x = 0;
+    while (start < size) {
+      finish = start + samples_per_pixel;  
+      ifinish = lround (finish);
+
+      int i;
+      gdouble sum = 0;
+      for (i = istart; i < ifinish; ++i)
+        sum += (gdouble) data[i];
+      sum /= ifinish - istart;
+
+      long y = SCOPE_HEIGHT / 2 + (sum / G_MAXUINT16) * SCOPE_HEIGHT / 2;
+      pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
+
+      start = finish;
+      istart = ifinish;
+      ++x;
+    }
+
+    break;
+  }
+
+  case VIDEOPATTERN_CIRCLE: {
+    int xcenter = SCOPE_WIDTH / 2;
+    int ycenter = SCOPE_HEIGHT / 2;
 
     int i;
-    gdouble sum = 0;
-    for (i = istart; i < ifinish; ++i)
-      sum += (gdouble) data[i];
-    sum /= ifinish - istart;
+    guint16 max = 0;
+    for (i = 0; i < size; ++i)
+      if (max < data[i])
+        max = data[i];
 
-    long y = SCOPE_HEIGHT / 2 + (sum / G_MAXUINT16) * SCOPE_HEIGHT / 2;
-    pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
+    int radius = (int) round(((gdouble) max / G_MAXUINT16) * (SCOPE_HEIGHT / 2));
 
-    start = finish;
-    istart = ifinish;
-    ++x;
+    int x, y;
+    for (x = 0; x < SCOPE_WIDTH; ++x) {
+      for (y = 0; y < SCOPE_HEIGHT; ++y) {
+        int x_ = abs(x - xcenter);
+        int y_ = abs(y - ycenter);
+        if (x_ * x_ + y_ * y_ <= radius * radius) {
+          pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
+        }
+      }
+    }
+
+    break;
+  }
+
+  default:
+    break;
   }
 
   gst_buffer_unmap (inbuf, &inbuf_info);
