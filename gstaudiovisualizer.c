@@ -88,6 +88,8 @@ enum {
   PROP_WIDTH,
   PROP_HEIGHT,
   PROP_VIDEOPATTERN,
+  PROP_COLOR,
+  PROP_BGCOLOR,
 };
 
 #define GST_TYPE_AUDIOVISUALIZER_VIDEOPATTERN (gst_audiovisualizer_videopattern_get_type ())
@@ -172,17 +174,25 @@ gst_audiovisualizer_class_init (GstAudiovisualizerClass * klass)
   gobject_class->get_property = gst_audiovisualizer_get_property;
 
   g_object_class_install_property(gobject_class, PROP_WIDTH,
-    g_param_spec_int("width", "Width", "Video frame width",
+    g_param_spec_int ("width", "Width", "Video frame width",
       32, 512, SCOPE_WIDTH, G_PARAM_READWRITE /*G_PARAM_CONSTRUCT_ONLY ?*/));
 
   g_object_class_install_property(gobject_class, PROP_HEIGHT,
-    g_param_spec_int("height", "Height", "Video frame height",
+    g_param_spec_int ("height", "Height", "Video frame height",
       32, 512, SCOPE_HEIGHT, G_PARAM_READWRITE /*G_PARAM_CONSTRUCT_ONLY ?*/));
 
-  g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_VIDEOPATTERN,
+  g_object_class_install_property (gobject_class, PROP_VIDEOPATTERN,
     g_param_spec_enum ("pattern", "Pattern", "Video pattern",
       GST_TYPE_AUDIOVISUALIZER_VIDEOPATTERN, VIDEOPATTERN_WAVE,
         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS /*!?*/));
+
+  g_object_class_install_property (gobject_class, PROP_COLOR,
+    g_param_spec_uint ("color", "Color", "Drawing color",
+      0, G_MAXUINT32, G_MAXUINT32, G_PARAM_READWRITE));
+
+  g_object_class_install_property (gobject_class, PROP_BGCOLOR,
+    g_param_spec_uint ("bgcolor", "BgColor", "Background color",
+      0, G_MAXUINT32, 0, G_PARAM_READWRITE));
 
   /*g_object_class_install_property (gobject_class, PROP_SILENT,
       g_param_spec_boolean ("silent", "Silent", "Produce verbose output ?",
@@ -247,6 +257,9 @@ gst_audiovisualizer_init (GstAudiovisualizer * filter)
   filter->height = SCOPE_HEIGHT;
   filter->fps_num = 25;      /* desired frame rate */
   filter->fps_denom = 1;
+  filter->pattern = VIDEOPATTERN_WAVE;
+  filter->color = G_MAXUINT32;
+  filter->bgcolor = 0;
   //! filter->visstate = NULL;
 
   /* reset the initial audio state */
@@ -286,6 +299,14 @@ gst_audiovisualizer_set_property (GObject * object, guint prop_id,
       filter->pattern = g_value_get_enum (value);
       break;
 
+    case PROP_COLOR:
+      filter->color = g_value_get_uint (value);
+      break;
+
+    case PROP_BGCOLOR:
+      filter->bgcolor = g_value_get_uint (value);
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -309,6 +330,14 @@ gst_audiovisualizer_get_property (GObject * object, guint prop_id,
 
     case PROP_VIDEOPATTERN:
       g_value_set_enum (value, filter->pattern);
+      break;
+
+    case PROP_COLOR:
+      g_value_set_uint (value, filter->color);
+      break;
+
+    case PROP_BGCOLOR:
+      g_value_set_uint (value, filter->bgcolor);
       break;
       
     default:
@@ -508,13 +537,16 @@ gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * inbuf
   gst_buffer_map (inbuf, &inbuf_info, GST_MAP_READ /*!?*/);
   
   static guint32 pixels[SCOPE_WIDTH * SCOPE_HEIGHT];
-  memset(pixels, 0, sizeof pixels);
 
   gint16 *data = (gint16 *) inbuf_info.data;
   gsize size = inbuf_info.size / (sizeof (guint16) / sizeof (guint8));
 
   switch (filter->pattern) {
   case VIDEOPATTERN_WAVE: {
+    int i;
+    for (i = 0; i < SCOPE_WIDTH * SCOPE_HEIGHT; ++i)
+      pixels[i] = filter->bgcolor;
+
     gdouble samples_per_pixel = (gdouble) size / SCOPE_WIDTH;
 
     double start = 0;
@@ -534,7 +566,7 @@ gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * inbuf
       sum /= ifinish - istart;
 
       long y = SCOPE_HEIGHT / 2 + (sum / G_MAXUINT16) * SCOPE_HEIGHT / 2;
-      pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
+      pixels[y * SCOPE_WIDTH + x] = filter->color;
 
       start = finish;
       istart = ifinish;
@@ -561,9 +593,7 @@ gst_audiovisualizer_process_data (GstAudiovisualizer * filter, GstBuffer * inbuf
       for (y = 0; y < SCOPE_HEIGHT; ++y) {
         int x_ = abs(x - xcenter);
         int y_ = abs(y - ycenter);
-        if (x_ * x_ + y_ * y_ <= radius * radius) {
-          pixels[y * SCOPE_WIDTH + x] = G_MAXUINT32;
-        }
+        pixels[y * SCOPE_WIDTH + x] = x_ * x_ + y_ * y_ <= radius * radius ? filter->color : filter->bgcolor;
       }
     }
 

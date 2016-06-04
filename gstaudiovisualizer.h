@@ -100,6 +100,8 @@ struct _GstAudiovisualizer
   guint        outsize;
 
   VideoPattern pattern;
+  guint32 color;
+  guint32 bgcolor;
   //!? gboolean silent; /*!?*/
 };
 
