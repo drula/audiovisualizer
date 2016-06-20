@@ -52,7 +52,6 @@ G_BEGIN_DECLS
 
 
 /* Standard macros for defining types for this element.  */
-/* #defines don't like whitespacey bits */
 #define GST_TYPE_AUDIOVISUALIZER \
   (gst_audiovisualizer_get_type())
 #define GST_AUDIOVISUALIZER(obj) \
@@ -88,10 +87,6 @@ struct _GstAudiovisualizer
 
   GstSegment   segment;
 
-  /* QoS stuff *//* with LOCK */
-  gdouble      proportion;
-  GstClockTime earliest_time;
-
   /* video state */
   gint         fps_num;
   gint         fps_denom;
@@ -102,7 +97,6 @@ struct _GstAudiovisualizer
   VideoPattern pattern;
   guint32 color;
   guint32 bgcolor;
-  //!? gboolean silent; /*!?*/
 };
 
 /* Standard definition defining a class for this element. */
